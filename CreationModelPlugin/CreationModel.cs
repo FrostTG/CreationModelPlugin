@@ -23,7 +23,7 @@ namespace CreationModelPlugin
             double width = 10000;
             double depth = 5000;
             List<XYZ> points = CreatePoints(width, depth);
-            List<Wall> walls = CreateHouse(doc, points, level1, level2);
+            CreateHouse(doc, points, level1, level2, width, depth);
 
             return Result.Succeeded;
         }
@@ -99,7 +99,7 @@ namespace CreationModelPlugin
             points.Add(new XYZ(-dx, -dy, 0));
             return points;
         }
-        public List<Wall> CreateHouse(Document doc, List<XYZ> points, Level level1, Level level2)
+        public List<Wall> CreateHouse(Document doc, List<XYZ> points, Level level1, Level level2, double width, double depth)
         {
             List<Wall> walls = new List<Wall>();
 
@@ -118,13 +118,13 @@ namespace CreationModelPlugin
                 AddWindow(doc, level1, walls[1]);
                 AddWindow(doc, level1, walls[2]);
                 AddWindow(doc, level1, walls[3]);
-                AddRoof(doc, level2, walls);
+                AddRoof(doc, level2, walls, width, depth);
                 ts.Commit();
             }
             return walls;
         }
 
-        private void AddRoof(Document doc, Level level2, List<Wall> walls)
+        private void AddRoof(Document doc, Level level2, List<Wall> walls, double width, double depth)
         {
             RoofType roofType = new FilteredElementCollector(doc)
                  .OfClass(typeof(RoofType))
@@ -132,6 +132,11 @@ namespace CreationModelPlugin
                  .Where(x => x.Name.Equals("Типовой - 400мм"))
                  .Where(x => x.FamilyName.Equals("Базовая крыша"))
                  .FirstOrDefault();
+            View view = new FilteredElementCollector(doc)
+                .OfClass(typeof(View))
+                .OfType<View>()
+                .Where(x => x.Name.Equals("Уровень 1"))
+                .FirstOrDefault();
             #region NewExtrusionRoof рабочий варинат без привязки
             //CurveArray curveArray = new CurveArray();
             //curveArray.Append(Line.CreateBound(new XYZ(0, 0, 0), new XYZ(0, 20, 20)));
@@ -139,36 +144,42 @@ namespace CreationModelPlugin
             //ReferencePlane plane = doc.Create.NewReferencePlane(new XYZ(0, 0, 0), new XYZ(0, 0, 20), new XYZ(0, 20, 0), doc.ActiveView);
             //doc.Create.NewExtrusionRoof(curveArray, plane, level2, roofType, 0, 40);
             #endregion
-            #region NewExtrusionRoof
+            #region NewExtrusionRoof ошибка при построении
+            //double wallWidth = walls[0].Width;
+            //double dt = wallWidth / 2;
 
-            Application application1 = doc.Application;
-            CurveArray curveArray = application1.Create.NewCurveArray();
-            LocationCurve curve1 = walls[1].Location as LocationCurve;
-            XYZ p1 = curve1.Curve.GetEndPoint(0);
-            XYZ p2 = curve1.Curve.GetEndPoint(1);
-            XYZ p3 = (p1 + p2) / 2;
-            LocationCurve curve2 = walls[3].Location as LocationCurve;
-            XYZ p4 = curve1.Curve.GetEndPoint(0);
-            XYZ p5 = curve1.Curve.GetEndPoint(1);
-            XYZ p6 = (p4 + p5) / 2;
-            LocationCurve curve3 = walls[0].Location as LocationCurve;
-            XYZ p7 = curve1.Curve.GetEndPoint(0);
-            XYZ p8 = curve1.Curve.GetEndPoint(1);
-            XYZ p9 = (p7 + p8) / 2;
-            LocationCurve curve4 = walls[2].Location as LocationCurve;
-            XYZ p10 = curve1.Curve.GetEndPoint(0);
-            XYZ p11 = curve1.Curve.GetEndPoint(1);
-            XYZ p12 = (p10 + p11) / 2;
-            //Line line1 = Line.CreateBound(p9, p12);
-            XYZ Z = (p9 + p12) / 2;
-            XYZ N = new XYZ(0, 0, 20);
-            XYZ T = Z + N;
-            CurveArray curveMain = new CurveArray();
-            curveMain.Append(Line.CreateBound(p3, T));
-            curveMain.Append(Line.CreateBound(T, p6));
-            ReferencePlane plane = doc.Create.NewReferencePlane(p3, T, p6, doc.ActiveView);
-            doc.Create.NewExtrusionRoof(curveMain, plane, level2, roofType, 0, 40);
+            //double exrtusionStart = -width / 2 - dt;
+            //double extrusionEnd = width / 2 + dt;
 
+            //double curveStrart = -depth / 2 - dt;
+            //double curveEnd = depth / 2 + dt;
+
+            //CurveArray curveArray = new CurveArray();
+            //curveArray.Append(Line.CreateBound(new XYZ(0, curveStrart, level2.Elevation), new XYZ(0, 0, level2.Elevation + 10)));
+            //curveArray.Append(Line.CreateBound(new XYZ(0, 0, level2.Elevation + 10), new XYZ(0, curveEnd, level2.Elevation)));
+            //ReferencePlane plane = doc.Create.NewReferencePlane(new XYZ(0, 0, 0), new XYZ(0, 0, 20), new XYZ(0, 20, 0), doc.ActiveView);
+            //ExtrusionRoof extrusionRoof = doc.Create.NewExtrusionRoof(curveArray, plane, level2, roofType, exrtusionStart, extrusionEnd);
+            //extrusionRoof.EaveCuts = EaveCutterType.TwoCutSquare;
+            #endregion
+            #region Нахождение через точки
+            LocationCurve hostCurve = walls[1].Location as LocationCurve;
+            XYZ point3 = hostCurve.Curve.GetEndPoint(0);
+            XYZ point4 = hostCurve.Curve.GetEndPoint(1);
+            XYZ point = (point3 + point4) / 2;
+            double wallWidth = walls[0].Width;
+            double dt = wallWidth / 2;
+            XYZ point1 = new XYZ(-dt, -dt, level2.Elevation);
+            XYZ point2 = new XYZ(dt, dt, level2.Elevation);
+            XYZ A = point3 + point1;
+            XYZ B = new XYZ(point.X, point.Y, 20);
+            XYZ C = point4 + point2;
+            CurveArray curveArray = new CurveArray();
+            curveArray.Append(Line.CreateBound(A, B));
+            curveArray.Append(Line.CreateBound(B, C));
+
+            ReferencePlane plane = doc.Create.NewReferencePlane(new XYZ(0, 0, 0), new XYZ(0, 0, 20), new XYZ(0, 20, 0), doc.ActiveView);
+            ExtrusionRoof extrusionRoof = doc.Create.NewExtrusionRoof(curveArray, plane, level2, roofType, -A.X-wallWidth, A.X+wallWidth);
+            extrusionRoof.EaveCuts = EaveCutterType.TwoCutSquare;
             #endregion
             #region NewFootPrintRoof
             //double wallWidth = walls[0].Width;
